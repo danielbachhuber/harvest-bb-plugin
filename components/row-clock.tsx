@@ -167,11 +167,18 @@ export function HarvestRowClock({
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
+          // size="icon" rather than the default: the default is `h-9 px-4
+          // py-2`, and `size-4` replaces the height and width but leaves the
+          // padding, which put 16px of air either side of the glyph that the
+          // copy control beside it does not have. The Button base also forces
+          // [&_svg]:size-4, so the glyph size is set here to match its
+          // neighbour's 3.5.
+          size="icon"
           aria-label={label}
           className={
             isRunning
-              ? "size-4 rounded text-background hover:text-background"
-              : "size-4 text-muted-foreground/70 hover:text-foreground"
+              ? "size-4 rounded [&_svg]:size-3.5 text-background hover:text-background"
+              : "size-4 [&_svg]:size-3.5 text-muted-foreground/70 hover:text-foreground"
           }
           style={isRunning ? { backgroundColor: "var(--success)" } : undefined}
         >

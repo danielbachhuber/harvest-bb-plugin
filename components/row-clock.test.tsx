@@ -40,6 +40,27 @@ function renderClock(isRunning: boolean, extra: Record<string, unknown> = {}) {
   );
 }
 
+describe("spacing", () => {
+  test("carries no padding, so it sits as close as the copy control", () => {
+    // bb's Button defaults to size="default", which is `h-9 px-4 py-2`.
+    // `size-4` replaces the height and width but not the padding, so the
+    // control ended up with 16px of horizontal padding its neighbour has not.
+    renderClock(false);
+    expect(screen.getByRole("button").className).not.toMatch(/(^|\s)px-\d/);
+  });
+
+  test("carries no padding when running either", () => {
+    renderClock(true);
+    expect(screen.getByRole("button").className).not.toMatch(/(^|\s)px-\d/);
+  });
+
+  test("draws its glyph at the size the copy control uses", () => {
+    // The Button base forces [&_svg]:size-4; the neighbour's glyph is 3.5.
+    renderClock(false);
+    expect(screen.getByRole("button").className).toContain("[&_svg]:size-3.5");
+  });
+});
+
 describe("resting", () => {
   test("names the item, since a row carries several controls", () => {
     renderClock(false);
