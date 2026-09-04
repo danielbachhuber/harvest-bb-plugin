@@ -160,10 +160,15 @@ function TrackTimeAction() {
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
-          variant={isRunning ? "default" : "ghost"}
+          variant="ghost"
           size="sm"
           aria-label={label}
-          className="h-7 gap-1.5 px-2"
+          // text-success rather than text-primary: bb's --primary is
+          // oklch(27% 0 0), a near-black neutral, so it reads as ordinary text
+          // rather than as a running state. The elapsed label and the
+          // accessible name carry the same information, so nothing depends on
+          // colour alone.
+          className={`h-7 gap-1.5 px-2 ${isRunning ? "text-success hover:text-success" : ""}`}
         >
           <Icon name="Clock" className="size-4" />
           {isRunning ? (

@@ -1,31 +1,27 @@
 /**
  * The Harvest timer picker.
  *
- * DUPLICATED SOURCE. An identical copy lives in
- * `~/.dotfiles/bb/plugins/bb-plugin-issue-sweep/components/timer-picker.tsx`,
- * because bb plugins cannot render each other's React components and the two
- * plugins live in different repositories. `components/timer-picker.sha256`
- * records the expected hash of this file in both places, so editing one copy
- * fails its own test until the change is ported and both hashes updated.
+ * Exported as `bb-plugin-harvest/picker` for other bb plugins to render. bb
+ * plugins cannot render each other's React components, so a consumer bundles
+ * this source into its own app bundle.
  *
- * Two constraints keep the copy literal, and both are load-bearing:
- *   1. It imports only from `./picker-state.js`, `./time-format.js`, and
- *      `@/components/ui/*`, all of which exist in both plugins.
- *   2. It takes an injected `client` instead of calling `useRpc`, so the same
- *      source works over either plugin's transport.
+ * It takes an injected `client` rather than calling `useRpc`, which is what
+ * lets one component serve this plugin and any consumer over their own
+ * transport. Its imports are all relative for the same reason: a consumer
+ * bundles this file out of node_modules, where the "@/" alias does not exist.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Button } from "./ui/button.js";
+import { Label } from "./ui/label.js";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+} from "./ui/select.js";
+import { Textarea } from "./ui/textarea.js";
 
 import {
   resolveSelection,
@@ -68,6 +64,20 @@ export interface HarvestTimerClient {
 export interface HarvestTimerPickerProps {
   client: HarvestTimerClient;
   defaults: { notes: string; externalReference?: PickerExternalReference };
+  /**
+   * Which remembered selection to open with. Defaults to the reference's
+   * group, so each repository remembers its own project and task.
+   *
+   * Pass something narrower to give a surface its own memory: a Reviews panel
+   * and an Issues panel are different kinds of work even on one repository,
+   * and sharing one memory means each keeps overwriting the other.
+   */
+  scope?: string | null;
+  /**
+   * The task this surface is usually about, seeded when the scope has no
+   * history of its own. It never overrides a choice made on this surface.
+   */
+  preferredTaskName?: string;
   onStarted: (entry: PickerEntry | null) => void;
   onCancel: () => void;
 }
@@ -75,11 +85,13 @@ export interface HarvestTimerPickerProps {
 export function HarvestTimerPicker({
   client,
   defaults,
+  scope: scopeOverride,
+  preferredTaskName,
   onStarted,
   onCancel,
 }: HarvestTimerPickerProps) {
   const reference = defaults.externalReference;
-  const scope = reference?.groupId ?? null;
+  const scope = scopeOverride ?? reference?.groupId ?? null;
 
   const [projects, setProjects] = useState<PickerProject[] | null>(null);
   const [selection, setSelection] = useState<PickerSelection | null>(null);
@@ -106,14 +118,14 @@ export function HarvestTimerPicker({
         if (!isMounted.current) return;
 
         setProjects(loaded);
-        setSelection(resolveSelection(loaded, remembered));
+        setSelection(resolveSelection(loaded, remembered, preferredTaskName));
       } catch {
         if (!isMounted.current) return;
         setProjects([]);
         setError("Could not reach Harvest.");
       }
     })();
-  }, [client, scope]);
+  }, [client, preferredTaskName, scope]);
 
   useEffect(() => {
     if (reference === undefined) return;

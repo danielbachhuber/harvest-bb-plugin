@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { resolveSelection, tasksFor, withProject } from "./picker-state.js";
+import { memoryScope, resolveSelection, tasksFor, withProject } from "./picker-state.js";
 
 const projects = [
   {
@@ -33,6 +33,67 @@ describe("tasksFor", () => {
 
   test("returns nothing when no project is chosen", () => {
     expect(tasksFor(projects, null)).toEqual([]);
+  });
+});
+
+describe("resolveSelection with a preferred task", () => {
+  const remembered = (projectId: number, taskId: number, exact: boolean) => ({
+    projectId,
+    taskId,
+    exact,
+  });
+
+  test("seeds the preferred task when the scope has no memory of its own", () => {
+    // The Reviews panel wants Code Review, but the global fallback carries
+    // whatever was last picked anywhere, which would otherwise always win.
+    expect(resolveSelection(projects, remembered(11, 22, false), "Review")).toEqual({
+      projectId: 11,
+      taskId: 23,
+    });
+  });
+
+  test("keeps the project from the fallback while replacing the task", () => {
+    // The remembered project is still the useful part: it is the client the
+    // work belongs to.
+    expect(resolveSelection(projects, remembered(12, 24, false), "Review")).toEqual({
+      projectId: 12,
+      taskId: 24,
+    });
+  });
+
+  test("honours an exact memory over the preferred task", () => {
+    // Once a surface has its own history, a deliberate choice has to stick.
+    expect(resolveSelection(projects, remembered(11, 22, true), "Review")).toEqual({
+      projectId: 11,
+      taskId: 22,
+    });
+  });
+
+  test("matches the preferred task without regard to case", () => {
+    expect(resolveSelection(projects, remembered(11, 22, false), "review")).toEqual({
+      projectId: 11,
+      taskId: 23,
+    });
+  });
+
+  test("falls back to the remembered task when the project has no such task", () => {
+    // Project 12 offers only Design, so a Review preference cannot apply and
+    // the fallback's own task stands.
+    expect(resolveSelection(projects, remembered(12, 24, false), "Review")?.taskId).toBe(24);
+  });
+
+  test("uses the preferred task with nothing remembered at all", () => {
+    expect(resolveSelection(projects, null, "Review")).toEqual({
+      projectId: 11,
+      taskId: 23,
+    });
+  });
+
+  test("ignores a preferred task that matches nothing anywhere", () => {
+    expect(resolveSelection(projects, null, "Nonexistent")).toEqual({
+      projectId: 11,
+      taskId: 22,
+    });
   });
 });
 
@@ -78,5 +139,29 @@ describe("withProject", () => {
 
   test("returns nothing for a project that is not assigned", () => {
     expect(withProject(projects, 999)).toBeNull();
+  });
+});
+
+describe("memoryScope", () => {
+  test("remembers per repository when the list is unnamed", () => {
+    expect(memoryScope(undefined, "acme-widgets")).toBe("acme-widgets");
+  });
+
+  test("gives a named list its own memory", () => {
+    expect(memoryScope("reviews", "acme-widgets")).toBe("reviews:acme-widgets");
+  });
+
+  test("keeps two named lists on one repository apart", () => {
+    expect(memoryScope("reviews", "acme-widgets")).not.toBe(
+      memoryScope("issues", "acme-widgets"),
+    );
+  });
+
+  test("still scopes a named list with no repository", () => {
+    expect(memoryScope("reviews", null)).toBe("reviews:");
+  });
+
+  test("has nothing to scope to when unnamed and repository-less", () => {
+    expect(memoryScope(undefined, null)).toBeNull();
   });
 });

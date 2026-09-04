@@ -98,6 +98,20 @@ describe("the header control", () => {
     await waitFor(() => expect(container.textContent).toContain("0:25"));
   });
 
+  test("tints a running timer with an accent that has chroma", async () => {
+    // bb's --primary is oklch(27% 0 0), so tinting with it makes a running
+    // timer look like ordinary dark text.
+    renderHeader({ ...IDLE_RPC, runningTimer: () => ({ entry: RUNNING }) });
+    const button = await screen.findByRole("button", { name: /internal/i });
+    expect(button.className).toContain("text-success");
+  });
+
+  test("leaves an idle control untinted", async () => {
+    renderHeader(IDLE_RPC);
+    const button = await screen.findByRole("button", { name: /track time/i });
+    expect(button.className).not.toContain("text-success");
+  });
+
   test("names the running project and task in the button, not just a clock", async () => {
     renderHeader({ ...IDLE_RPC, runningTimer: () => ({ entry: RUNNING }) });
     expect(

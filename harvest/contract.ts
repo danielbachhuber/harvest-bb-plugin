@@ -50,7 +50,16 @@ export const AssignmentsSchema = z.object({
 });
 
 export const SelectionSchema = z
-  .object({ projectId: z.number().int(), taskId: z.number().int() })
+  .object({
+    projectId: z.number().int(),
+    taskId: z.number().int(),
+    /**
+     * True when this scope had its own history, false when it came from the
+     * global fallback. A surface that prefers a particular task seeds it over
+     * a fallback but never over a choice made on that surface.
+     */
+    exact: z.boolean(),
+  })
   .nullable();
 
 export const TrackedHoursInput = z.strictObject({

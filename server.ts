@@ -218,12 +218,15 @@ export function createPlugin(deps: PluginDeps = {}) {
       async lastSelection({ scope }) {
         if (scope !== null && scope !== "") {
           const scoped = await bb.storage.kv.get<Selection>(`${SELECTION_PREFIX}${scope}`);
-          if (scoped !== undefined && scoped !== null) return scoped;
+          if (scoped !== undefined && scoped !== null) return { ...scoped, exact: true };
         }
 
         // A scope with no history, and the thread header with no reference at
-        // all, both fall back to whatever was picked most recently.
-        return (await bb.storage.kv.get<Selection>(LATEST_SELECTION_KEY)) ?? null;
+        // all, both fall back to whatever was picked most recently. That is a
+        // starting point rather than a decision, so it is not exact: a surface
+        // preferring a particular task may replace the task.
+        const latest = await bb.storage.kv.get<Selection>(LATEST_SELECTION_KEY);
+        return latest === undefined || latest === null ? null : { ...latest, exact: false };
       },
     });
 

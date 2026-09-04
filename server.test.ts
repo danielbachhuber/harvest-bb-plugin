@@ -278,12 +278,13 @@ describe("starting a timer", () => {
       },
     });
 
+    // exact, because this scope has its own history now.
     await expect(
       harness.behavior.callRpc("lastSelection", { scope: "psi-product" }),
-    ).resolves.toEqual({ projectId: 11, taskId: 22 });
+    ).resolves.toEqual({ projectId: 11, taskId: 22, exact: true });
   });
 
-  test("does not leak one repository's selection into another", async () => {
+  test("offers another repository the last selection as an inexact starting point", async () => {
     const { bb, harness, plugin } = host(routes);
     await plugin(bb);
 
@@ -294,9 +295,12 @@ describe("starting a timer", () => {
       externalReference: { id: "1", groupId: "repo-a", accountId: null, permalink: null },
     });
 
+    // Useful as a starting point, but flagged inexact so a surface preferring
+    // a particular task may still seed it.
     await expect(harness.behavior.callRpc("lastSelection", { scope: "repo-b" })).resolves.toEqual({
       projectId: 11,
       taskId: 22,
+      exact: false,
     });
   });
 });
