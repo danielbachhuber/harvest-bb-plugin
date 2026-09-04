@@ -10,6 +10,13 @@ the running timer's elapsed time when one is going, and opens a picker for
 choosing a project and task, writing a note, and starting a timer. A running
 timer can be stopped from the same control.
 
+The control distinguishes a timer running for this thread from one left running
+somewhere else. When bb can resolve the thread's branch to a pull request, the
+timer is this thread's work only if it carries that pull request's reference;
+anything else is amber and named "running elsewhere", and its popover offers to
+stop it above a picker prefilled for this thread. A thread with no pull request
+has nothing to compare against, so any running timer reads as its own.
+
 The plugin also exposes a generic RPC surface (`assignments`, `runningTimer`,
 `trackedHours`, `startTimer`, `stopTimer`, `lastSelection`) that knows nothing
 about any particular tool, so another bb plugin can start timers through it.

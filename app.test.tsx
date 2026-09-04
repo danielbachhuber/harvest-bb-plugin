@@ -32,14 +32,28 @@ afterEach(() => {
   cleanups = [];
 });
 
-function renderHeader(rpc: Record<string, unknown>) {
+const PULL_REQUEST = {
+  number: 5845,
+  title: "Move feature toggles onto the stories resource",
+  url: "https://github.com/acme/acme-widgets/pull/5845",
+  state: "open" as const,
+  attention: "none" as const,
+};
+
+function renderHeader(
+  rpc: Record<string, unknown>,
+  pullRequest: typeof PULL_REQUEST | null = null,
+) {
   const registration = app.threadHeaderActions[0];
   if (registration === undefined) throw new Error("no thread header action registered");
 
   const slot = renderSlot(
     registration,
     { threadId: "thr_1", projectId: "proj_1", isCompactViewport: false },
-    { rpc: rpc as never },
+    {
+      rpc: rpc as never,
+      sidebarPullRequests: pullRequest === null ? {} : { thr_1: pullRequest },
+    },
   );
   cleanups.push(() => slot.lifecycle.unmount());
   return slot;
@@ -168,6 +182,63 @@ describe("the header control", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: /track time/i })).toBeNull(),
     );
+  });
+});
+
+describe("a timer running somewhere else", () => {
+  const ELSEWHERE = {
+    ...RUNNING,
+    projectName: "Internal",
+    taskName: "Development",
+    externalReference: { id: "3213", groupId: "acme-widgets", accountId: "acme", permalink: null },
+  };
+
+  const HERE = {
+    ...RUNNING,
+    externalReference: { id: "5845", groupId: "acme-widgets", accountId: "acme", permalink: null },
+  };
+
+  test("says so in the accessible name rather than reading as this thread's work", async () => {
+    renderHeader({ ...IDLE_RPC, runningTimer: () => ({ entry: ELSEWHERE }) }, PULL_REQUEST);
+    expect(await screen.findByRole("button", { name: /running elsewhere/i })).toBeTruthy();
+  });
+
+  test("wears the attention accent, not the running one", async () => {
+    // Green would say this thread is being tracked, which is the confusion
+    // this state exists to remove.
+    renderHeader({ ...IDLE_RPC, runningTimer: () => ({ entry: ELSEWHERE }) }, PULL_REQUEST);
+    const button = await screen.findByRole("button", { name: /running elsewhere/i });
+    expect(button.className).toContain("text-attention");
+    expect(button.className).not.toContain("text-success");
+  });
+
+  test("still shows how long it has been running", async () => {
+    const { container } = renderHeader(
+      { ...IDLE_RPC, runningTimer: () => ({ entry: ELSEWHERE }) },
+      PULL_REQUEST,
+    );
+    await waitFor(() => expect(container.textContent).toContain("0:25"));
+  });
+
+  test("reads as this thread's work once the reference matches its pull request", async () => {
+    renderHeader({ ...IDLE_RPC, runningTimer: () => ({ entry: HERE }) }, PULL_REQUEST);
+    const button = await screen.findByRole("button", { name: /internal/i });
+    expect(button.className).toContain("text-success");
+    expect(button.className).not.toContain("text-attention");
+  });
+
+  test("treats a timer with no reference as elsewhere once the thread knows its own", async () => {
+    renderHeader(
+      { ...IDLE_RPC, runningTimer: () => ({ entry: { ...RUNNING, externalReference: null } }) },
+      PULL_REQUEST,
+    );
+    expect(await screen.findByRole("button", { name: /running elsewhere/i })).toBeTruthy();
+  });
+
+  test("keeps calling it this thread's timer when there is no pull request to compare", async () => {
+    renderHeader({ ...IDLE_RPC, runningTimer: () => ({ entry: ELSEWHERE }) });
+    const button = await screen.findByRole("button", { name: /internal/i });
+    expect(button.className).toContain("text-success");
   });
 });
 

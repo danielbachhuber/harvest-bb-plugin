@@ -49,3 +49,47 @@ export function timerDefaultsForItem(row: GitHubItem): IssueTimerDefaults {
     },
   };
 }
+
+/**
+ * The GitHub item a bb thread is about, from the host's pull-request lookup.
+ *
+ * `experimental_useSidebarThreadPullRequest` resolves a thread's branch to its
+ * pull request but carries no repository, so the url is the only place the
+ * owner and name can come from. Parsing it keeps the whole association inside
+ * the plugin: nothing has to be registered from a GitHub panel, and a thread
+ * started by hand is understood as well as one a panel spawned.
+ *
+ * The path is taken as it is found rather than matched against github.com, so
+ * an enterprise host works the same way. `number` comes from the host's own
+ * field rather than the url, because that is the value the rest of bb agrees
+ * on.
+ */
+export function githubItemFromPullRequest(
+  pullRequest: { number: number; title: string; url: string } | null,
+): GitHubItem | null {
+  if (pullRequest === null) return null;
+
+  const repo = repoFromUrl(pullRequest.url);
+  if (repo === null) return null;
+
+  return {
+    repo,
+    number: pullRequest.number,
+    title: pullRequest.title,
+    url: pullRequest.url,
+  };
+}
+
+function repoFromUrl(url: string): string | null {
+  let path: string;
+  try {
+    path = new URL(url).pathname;
+  } catch {
+    return null;
+  }
+
+  const [owner, name] = path.split("/").filter((segment) => segment !== "");
+  if (owner === undefined || name === undefined) return null;
+
+  return `${owner}/${name}`;
+}
