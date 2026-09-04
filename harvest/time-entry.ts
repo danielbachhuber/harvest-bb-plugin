@@ -1,4 +1,4 @@
-import { fromApiReference } from "./reference.js";
+import { fromApiReference, matchesReference } from "./reference.js";
 import type { TimeEntry } from "./types.js";
 
 /**
@@ -57,4 +57,40 @@ function nameOf(value: unknown): string {
   if (value === null || typeof value !== "object") return "";
   const name = (value as Record<string, unknown>).name;
   return typeof name === "string" ? name : "";
+}
+
+/**
+ * The day's entry for this work, if there is one.
+ *
+ * Harvest's own convention is a single entry per project, task and day, which
+ * a timer resumes rather than replaces. Posting a new entry on every start
+ * scatters one day's work across duplicates that have to be merged by hand.
+ *
+ * A running match is returned rather than skipped, because the caller has to
+ * be able to tell "already tracking this" from "nothing here yet". Reporting
+ * null for a running entry made the caller post a duplicate for work that was
+ * already being tracked.
+ *
+ * `entries` is expected to be already narrowed to one project, task and day;
+ * this decides only whether an entry is about the same thing.
+ */
+export function findDayEntry(
+  entries: TimeEntry[],
+  query: { externalId: string; groupId?: string | null } | null,
+): TimeEntry | null {
+  const candidates = entries.filter((entry) => {
+    // Unlinked work matches only unlinked entries, and vice versa: one project
+    // and task can cover both a specific issue and general work.
+    if (query === null) return entry.externalReference === null;
+    return matchesReference(entry.externalReference, query);
+  });
+
+  if (candidates.length === 0) return null;
+
+  // Whatever is running is the authoritative answer for right now. Failing
+  // that, the entry carrying the most time is the day's real one.
+  const running = candidates.find((entry) => entry.timerStartedAt !== null);
+  if (running !== undefined) return running;
+
+  return candidates.reduce((most, entry) => (entry.hours > most.hours ? entry : most));
 }

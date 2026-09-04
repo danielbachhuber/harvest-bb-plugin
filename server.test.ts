@@ -305,6 +305,155 @@ describe("starting a timer", () => {
   });
 });
 
+describe("resuming the day's entry", () => {
+  const DAY = "/v2/time_entries?from=2026-09-02&to=2026-09-02&project_id=11&task_id=22";
+
+  const stoppedToday = (overrides: Record<string, unknown> = {}) =>
+    runningEntry({ id: 41, is_running: false, timer_started_at: null, ...overrides });
+
+  test("restarts the day's entry instead of posting another", async () => {
+    // Harvest keeps one entry per project, task and day. Posting a second
+    // scatters the day's work across duplicates to be merged by hand.
+    const { bb, harness, plugin, fetchImpl } = host({
+      ...READ_ROUTES,
+      [`GET ${DAY}`]: { time_entries: [stoppedToday()], links: { next: null } },
+      "PATCH /v2/time_entries/41/restart": stoppedToday({ is_running: true }),
+    });
+    await plugin(bb);
+
+    await harness.behavior.callRpc("startTimer", {
+      projectId: 11,
+      taskId: 22,
+      notes: "note",
+      externalReference: {
+        id: "5515",
+        groupId: "psi-product",
+        accountId: null,
+        permalink: null,
+      },
+    });
+
+    const methods = fetchImpl.mock.calls.map(
+      (call) => ((call as unknown as [string, RequestInit])[1] ?? {}).method ?? "GET",
+    );
+    expect(methods).toContain("PATCH");
+    expect(methods).not.toContain("POST");
+  });
+
+  test("returns the resumed entry, so the caller sees a running timer", async () => {
+    const { bb, harness, plugin } = host({
+      ...READ_ROUTES,
+      [`GET ${DAY}`]: { time_entries: [stoppedToday()], links: { next: null } },
+      "PATCH /v2/time_entries/41/restart": stoppedToday({ is_running: true }),
+    });
+    await plugin(bb);
+
+    await expect(
+      harness.behavior.callRpc("startTimer", {
+        projectId: 11,
+        taskId: 22,
+        notes: "note",
+        externalReference: {
+          id: "5515",
+          groupId: "psi-product",
+          accountId: null,
+          permalink: null,
+        },
+      }),
+    ).resolves.toMatchObject({ entry: { id: 41 } });
+  });
+
+  test("does nothing when this work is already being tracked", async () => {
+    // Clicking a row whose timer is running must not add a second entry for
+    // the same work. Harvest would stop the first and the day would end up
+    // split across two.
+    const { bb, harness, plugin, fetchImpl } = host({
+      ...READ_ROUTES,
+      [`GET ${DAY}`]: { time_entries: [runningEntry({ id: 41 })], links: { next: null } },
+    });
+    await plugin(bb);
+
+    await expect(
+      harness.behavior.callRpc("startTimer", {
+        projectId: 11,
+        taskId: 22,
+        notes: "note",
+        externalReference: {
+          id: "5515",
+          groupId: "psi-product",
+          accountId: null,
+          permalink: null,
+        },
+      }),
+    ).resolves.toMatchObject({ entry: { id: 41 } });
+
+    const methods = fetchImpl.mock.calls.map(
+      (call) => ((call as unknown as [string, RequestInit])[1] ?? {}).method ?? "GET",
+    );
+    expect(methods).not.toContain("POST");
+    expect(methods).not.toContain("PATCH");
+  });
+
+  test("posts a new entry when the day has none for this work", async () => {
+    const { bb, harness, plugin, fetchImpl } = host({
+      ...READ_ROUTES,
+      [`GET ${DAY}`]: { time_entries: [], links: { next: null } },
+      "POST /v2/time_entries": runningEntry(),
+    });
+    await plugin(bb);
+
+    await harness.behavior.callRpc("startTimer", { projectId: 11, taskId: 22, notes: "note" });
+
+    const methods = fetchImpl.mock.calls.map(
+      (call) => ((call as unknown as [string, RequestInit])[1] ?? {}).method ?? "GET",
+    );
+    expect(methods).toContain("POST");
+  });
+
+  test("posts a new entry when the day's entry is for something else", async () => {
+    const { bb, harness, plugin, fetchImpl } = host({
+      ...READ_ROUTES,
+      [`GET ${DAY}`]: {
+        time_entries: [stoppedToday({ external_reference: { id: "9999", group_id: "psi-product" } })],
+        links: { next: null },
+      },
+      "POST /v2/time_entries": runningEntry(),
+    });
+    await plugin(bb);
+
+    await harness.behavior.callRpc("startTimer", {
+      projectId: 11,
+      taskId: 22,
+      notes: "note",
+      externalReference: { id: "5515", groupId: "psi-product", accountId: null, permalink: null },
+    });
+
+    const methods = fetchImpl.mock.calls.map(
+      (call) => ((call as unknown as [string, RequestInit])[1] ?? {}).method ?? "GET",
+    );
+    expect(methods).toContain("POST");
+  });
+
+  test("still starts a timer when the day cannot be read", async () => {
+    // A failed lookup must not block starting; the worst case is a duplicate
+    // entry, which is far better than no timer at all.
+    const { bb, harness, plugin, fetchImpl } = host({
+      ...READ_ROUTES,
+      "POST /v2/time_entries": runningEntry(),
+    });
+    await plugin(bb);
+
+    await expect(
+      harness.behavior.callRpc("startTimer", { projectId: 11, taskId: 22, notes: "note" }),
+    ).resolves.toMatchObject({ entry: { id: 900 } });
+
+    const methods = fetchImpl.mock.calls.map(
+      (call) => ((call as unknown as [string, RequestInit])[1] ?? {}).method ?? "GET",
+    );
+    expect(methods).toContain("POST");
+  });
+});
+
 describe("lastSelection", () => {
   test("reports nothing remembered before the first timer", async () => {
     const { bb, harness, plugin } = host(READ_ROUTES);

@@ -74,7 +74,7 @@ Schedules only run while the plugin is loaded. Disable it and the requests stop.
 | `assignments` | 0 or 1 | Served from storage; only fetches on a cold cache. |
 | `runningTimer` | 1 | |
 | `trackedHours` | 1, plus 1 per extra page | `GET /v2/time_entries?external_reference_id=…` |
-| `startTimer` | 1, or 2 on the first call after a load | `POST /v2/time_entries`, preceded once by `GET /v2/company` to read the account's timer style, which is then held in memory. |
+| `startTimer` | 2, or 3 on the first call after a load | One `GET /v2/time_entries` narrowed to the day, project and task, to find an entry to resume; then either `PATCH /v2/time_entries/{id}/restart` or `POST /v2/time_entries`. On the first call after a load, one extra `GET /v2/company` to read the account's timer style, which is then held in memory. |
 | `stopTimer` | 1 | `PATCH /v2/time_entries/{id}/stop` |
 | `lastSelection` | 0 | Plugin storage only. |
 
@@ -92,6 +92,17 @@ change, which is rare, while the running timer changes often.
 Opening the picker costs **1 request** in the common case: `assignments` is
 served from storage, `lastSelection` touches no network, and only
 `trackedHours` goes out.
+
+### Resuming rather than duplicating
+
+Starting a timer first looks for the day's existing entry for the same
+project, task and external reference, and restarts that when it finds one.
+Harvest's own convention is a single entry per project, task and day, so
+posting a new entry on every start scatters one day's work across duplicates
+that have to be merged by hand.
+
+The lookup is deliberately forgiving: if it fails, the timer still starts as a
+new entry. A duplicate is a much better outcome than refusing to start.
 
 ### Retries
 

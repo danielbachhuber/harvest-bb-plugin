@@ -189,6 +189,32 @@ describe("writes", () => {
     expect(url).toContain("is_running=true");
   });
 
+  test("restarts a stopped entry rather than creating another", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse({ id: 9 }));
+    const { client } = api(fetchImpl as unknown as typeof fetch);
+
+    await client.restartTimer(9);
+
+    const [url, init] = fetchImpl.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe("https://api.harvestapp.com/v2/time_entries/9/restart");
+    expect(init.method).toBe("PATCH");
+  });
+
+  test("asks Harvest to narrow a day's entries to one project and task", async () => {
+    // Filtering server-side keeps this to one request however much time was
+    // logged that day.
+    const fetchImpl = vi.fn(async () => jsonResponse({ time_entries: [], links: { next: null } }));
+    const { client } = api(fetchImpl as unknown as typeof fetch);
+
+    await client.entriesForDay({ date: "2026-09-04", projectId: 11, taskId: 22 });
+
+    const [url] = fetchImpl.mock.calls[0] as unknown as [string];
+    expect(url).toContain("from=2026-09-04");
+    expect(url).toContain("to=2026-09-04");
+    expect(url).toContain("project_id=11");
+    expect(url).toContain("task_id=22");
+  });
+
   test("filters entries by external reference id", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse({ time_entries: [], links: { next: null } }));
     const { client } = api(fetchImpl as unknown as typeof fetch);

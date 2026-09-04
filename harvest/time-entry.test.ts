@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { fromApiEntry, pickRunningEntry } from "./time-entry.js";
+import { findDayEntry, fromApiEntry, pickRunningEntry } from "./time-entry.js";
 
 function raw(overrides: Record<string, unknown> = {}) {
   return {
@@ -98,5 +98,74 @@ describe("pickRunningEntry", () => {
       raw({ id: 3, timer_started_at: "2026-09-02T10:00:00Z" }),
     ];
     expect(pickRunningEntry(entries)?.id).toBe(2);
+  });
+});
+
+describe("findDayEntry", () => {
+  const stopped = (overrides: Record<string, unknown> = {}) =>
+    fromApiEntry(raw({ is_running: false, timer_started_at: null, ...overrides }))!;
+
+  const reference = { externalId: "5851", groupId: "psi-product" };
+
+  test("finds the day's entry for the same thing, so the day keeps one entry", () => {
+    // Harvest's own convention is one entry per project, task and day. Posting
+    // a second scatters a day's work across duplicates.
+    const entry = stopped({ id: 41, external_reference: { id: "5851", group_id: "psi-product" } });
+    expect(findDayEntry([entry], reference)?.id).toBe(41);
+  });
+
+  test("ignores an entry for a different item", () => {
+    const entry = stopped({ id: 41, external_reference: { id: "9999", group_id: "psi-product" } });
+    expect(findDayEntry([entry], reference)).toBeNull();
+  });
+
+  test("ignores the same number in another repository", () => {
+    const entry = stopped({ id: 41, external_reference: { id: "5851", group_id: "other-repo" } });
+    expect(findDayEntry([entry], reference)).toBeNull();
+  });
+
+  test("returns an entry that is already running, rather than hiding it", () => {
+    // The caller has to know: a running match means there is nothing to do.
+    // Reporting null here made the caller post a duplicate for work already
+    // being tracked.
+    const entry = fromApiEntry(
+      raw({ id: 41, is_running: true, external_reference: { id: "5851", group_id: "psi-product" } }),
+    )!;
+    expect(findDayEntry([entry], reference)?.id).toBe(41);
+  });
+
+  test("prefers a running entry over a larger stopped one", () => {
+    // Whatever is running is the authoritative answer for right now.
+    const linked = { id: "5851", group_id: "psi-product" };
+    const bigger = stopped({ id: 41, hours: 3, external_reference: linked });
+    const running = fromApiEntry(
+      raw({ id: 42, hours: 0.1, is_running: true, external_reference: linked }),
+    )!;
+    expect(findDayEntry([bigger, running], reference)?.id).toBe(42);
+  });
+
+  test("matches an unlinked entry when there is nothing to link to", () => {
+    // A timer started from the thread header has no reference, and the same
+    // project, task and day is still the same bucket of work.
+    const entry = stopped({ id: 41, external_reference: null });
+    expect(findDayEntry([entry], null)?.id).toBe(41);
+  });
+
+  test("does not resume a linked entry for unlinked work", () => {
+    const entry = stopped({ id: 41, external_reference: { id: "5851", group_id: "psi-product" } });
+    expect(findDayEntry([entry], null)).toBeNull();
+  });
+
+  test("prefers the entry with the most time when a day has several", () => {
+    // Duplicates happen (a timer started in another tool, a manual entry).
+    // The one carrying the day's work is the one to resume.
+    const linked = { id: "5851", group_id: "psi-product" };
+    const slight = stopped({ id: 41, hours: 0.25, external_reference: linked });
+    const substantial = stopped({ id: 42, hours: 1.5, external_reference: linked });
+    expect(findDayEntry([slight, substantial], reference)?.id).toBe(42);
+  });
+
+  test("reads an empty day as nothing to resume", () => {
+    expect(findDayEntry([], reference)).toBeNull();
   });
 });

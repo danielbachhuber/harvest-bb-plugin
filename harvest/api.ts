@@ -42,8 +42,10 @@ export interface HarvestApi {
   projectAssignments(): Promise<unknown[]>;
   runningEntries(): Promise<unknown[]>;
   entriesForExternalId(externalId: string): Promise<unknown[]>;
+  entriesForDay(input: { date: string; projectId: number; taskId: number }): Promise<unknown[]>;
   startTimer(body: Record<string, unknown>): Promise<unknown>;
   stopTimer(entryId: number): Promise<unknown>;
+  restartTimer(entryId: number): Promise<unknown>;
 }
 
 export function createHarvestApi(options: HarvestApiOptions): HarvestApi {
@@ -144,6 +146,12 @@ export function createHarvestApi(options: HarvestApiOptions): HarvestApi {
         `${API_HOST}/v2/time_entries?external_reference_id=${encodeURIComponent(externalId)}`,
         "time_entries",
       ),
+    entriesForDay: ({ date, projectId, taskId }) =>
+      paged(
+        `${API_HOST}/v2/time_entries?from=${date}&to=${date}` +
+          `&project_id=${projectId}&task_id=${taskId}`,
+        "time_entries",
+      ),
     startTimer: (body) =>
       request(`${API_HOST}/v2/time_entries`, {
         method: "POST",
@@ -152,6 +160,8 @@ export function createHarvestApi(options: HarvestApiOptions): HarvestApi {
       }),
     stopTimer: (entryId) =>
       request(`${API_HOST}/v2/time_entries/${entryId}/stop`, { method: "PATCH" }),
+    restartTimer: (entryId) =>
+      request(`${API_HOST}/v2/time_entries/${entryId}/restart`, { method: "PATCH" }),
   };
 }
 

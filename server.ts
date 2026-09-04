@@ -4,9 +4,9 @@ import { createHarvestApi, HarvestError, type HarvestApi } from "./harvest/api.j
 import { normalizeAssignments } from "./harvest/assignments.js";
 import { TIMER_CHANNEL } from "./harvest/channel.js";
 import { rpcContract } from "./harvest/contract.js";
-import { startEntryBody } from "./harvest/entry.js";
+import { spentDate, startEntryBody } from "./harvest/entry.js";
 import { sumHoursForReference } from "./harvest/reference.js";
-import { fromApiEntry, pickRunningEntry } from "./harvest/time-entry.js";
+import { findDayEntry, fromApiEntry, pickRunningEntry } from "./harvest/time-entry.js";
 import type { ProjectOption, Selection, TimeEntry } from "./harvest/types.js";
 
 export { rpcContract } from "./harvest/contract.js";
@@ -108,6 +108,35 @@ export function createPlugin(deps: PluginDeps = {}) {
       return projects;
     }
 
+    /**
+     * The day's existing entry for this project, task and reference.
+     *
+     * A failed lookup returns null so the timer still starts. The worst case
+     * is a duplicate entry, which is much better than refusing to start.
+     */
+    async function todaysEntry(
+      client: HarvestApi,
+      input: { projectId: number; taskId: number },
+      query: { externalId: string; groupId?: string | null } | null,
+    ): Promise<TimeEntry | null> {
+      try {
+        const raw = await client.entriesForDay({
+          date: spentDate(now()),
+          projectId: input.projectId,
+          taskId: input.taskId,
+        });
+
+        const entries = raw
+          .map(fromApiEntry)
+          .filter((entry): entry is TimeEntry => entry !== null);
+
+        return findDayEntry(entries, query);
+      } catch (error) {
+        bb.log.warn(`Could not check today's Harvest entries: ${messageOf(error)}`);
+        return null;
+      }
+    }
+
     async function rememberSelection(scope: string | null, selection: Selection): Promise<void> {
       if (selection === null) return;
 
@@ -190,14 +219,35 @@ export function createPlugin(deps: PluginDeps = {}) {
         const client = await api();
         if (client === null) throw new Error("Harvest is not configured.");
 
-        const body = startEntryBody(input, {
-          wantsTimestampTimers: await wantsTimestampTimers(client),
-          now: now(),
-        });
+        const reference = input.externalReference;
+        const query =
+          reference === undefined
+            ? null
+            : { externalId: reference.id, groupId: reference.groupId };
 
-        const entry = fromApiEntry(await client.startTimer(body));
+        // Resume the day's entry for this work rather than adding another.
+        // Harvest keeps one entry per project, task and day, and posting a
+        // second scatters the day across duplicates to be merged by hand.
+        const existing = await todaysEntry(client, input, query);
+
+        // Already tracking this. Starting again would stop that timer and
+        // split the day in two for no gain.
+        const entry =
+          existing !== null && existing.timerStartedAt !== null
+            ? existing
+            : existing !== null
+              ? fromApiEntry(await client.restartTimer(existing.id))
+              : fromApiEntry(
+                  await client.startTimer(
+                    startEntryBody(input, {
+                      wantsTimestampTimers: await wantsTimestampTimers(client),
+                      now: now(),
+                    }),
+                  ),
+                );
+
         await reconcileRunning(entry, { announce: true });
-        await rememberSelection(input.externalReference?.groupId ?? null, {
+        await rememberSelection(reference?.groupId ?? null, {
           projectId: input.projectId,
           taskId: input.taskId,
         });
