@@ -70,6 +70,12 @@ const runningSchema = z.object({ entry: entrySchema.nullable() });
 export interface RunningReference {
   externalId: string;
   groupId: string | null;
+  /** The entry itself, so a consumer can stop or restart it. */
+  entryId: number;
+  /** When it started, so a consumer can show how long it has run. */
+  startedAt: string | null;
+  projectName: string;
+  taskName: string;
 }
 
 export interface HarvestBridge {
@@ -84,6 +90,7 @@ export interface HarvestBridge {
     notes: string;
     externalReference?: PickerExternalReference;
   }): Promise<z.infer<typeof runningSchema>>;
+  stopTimer(input: { entryId: number }): Promise<void>;
 }
 
 export function createHarvestBridge(bb: BbPluginApi): HarvestBridge {
@@ -122,10 +129,19 @@ export function createHarvestBridge(bb: BbPluginApi): HarvestBridge {
     async runningReference() {
       try {
         const { entry } = await call("runningTimer", runningSchema, null);
-        const reference = entry?.externalReference ?? null;
+        if (entry === null) return null;
+
+        const reference = entry.externalReference;
         if (reference === null) return null;
 
-        return { externalId: reference.id, groupId: reference.groupId };
+        return {
+          externalId: reference.id,
+          groupId: reference.groupId,
+          entryId: entry.id,
+          startedAt: entry.timerStartedAt,
+          projectName: entry.projectName,
+          taskName: entry.taskName,
+        };
       } catch (error) {
         bb.log.warn(`Could not read the running Harvest timer: ${messageOf(error)}`);
         return null;
@@ -161,6 +177,10 @@ export function createHarvestBridge(bb: BbPluginApi): HarvestBridge {
 
     async startTimer(input) {
       return await call("startTimer", runningSchema, input);
+    },
+
+    async stopTimer(input) {
+      await call("stopTimer", z.null(), input);
     },
   };
 }

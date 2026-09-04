@@ -152,6 +152,10 @@ describe("the running timer", () => {
     await expect(bridge.runningReference()).resolves.toEqual({
       externalId: "5515",
       groupId: "acme-widgets",
+      entryId: 900,
+      startedAt: "2026-09-02T10:00:00Z",
+      projectName: "Internal",
+      taskName: "Development",
     });
   });
 
@@ -180,6 +184,25 @@ describe("the running timer", () => {
 
   test("reports nothing rather than failing when Harvest is gone", async () => {
     await expect(unavailable().bridge.runningReference()).resolves.toBeNull();
+  });
+});
+
+describe("stopping a timer", () => {
+  test("asks the Harvest plugin to stop one entry", async () => {
+    const callRpc = vi.fn(async () => null);
+    const { bridge } = bridgeWith(callRpc);
+
+    await bridge.stopTimer({ entryId: 900 });
+
+    expect(callRpc).toHaveBeenCalledWith(
+      expect.objectContaining({ method: "stopTimer", input: { entryId: 900 } }),
+    );
+  });
+
+  test("reports the failure instead of swallowing it", async () => {
+    // A stop that quietly does nothing leaves the user believing time stopped
+    // being tracked when it did not.
+    await expect(unavailable().bridge.stopTimer({ entryId: 900 })).rejects.toThrow();
   });
 });
 

@@ -27,6 +27,7 @@
     "lib",
     "hooks",
     "harvest",
+    "shared",
     "*.test.ts",
     "*.test.tsx"
   ]

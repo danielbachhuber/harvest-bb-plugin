@@ -39,6 +39,7 @@ function fakeClient(overrides: Partial<HarvestTimerClient> = {}): HarvestTimerCl
     trackedHours: vi.fn(async () => ({ hours: 0 })),
     startTimer: vi.fn(async () => ({ entry: null })),
     lastSelection: vi.fn(async () => null),
+    stopTimer: vi.fn(async () => {}),
     ...overrides,
   };
 }

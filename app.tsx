@@ -41,6 +41,9 @@ function usePickerClient(rpc: Rpc): HarvestTimerClient {
         rpc.call("trackedHours", { externalId: input.externalId, groupId: input.groupId ?? null }),
       startTimer: (input) => rpc.call("startTimer", input),
       lastSelection: (input) => rpc.call("lastSelection", input),
+      stopTimer: async (input) => {
+        await rpc.call("stopTimer", input);
+      },
     }),
     [rpc],
   );
@@ -177,7 +180,15 @@ function TrackTimeAction() {
         </Button>
       </PopoverTrigger>
 
-      <PopoverContent align="end" className="w-[26rem] p-0">
+      <PopoverContent
+        align="end"
+        className="p-0"
+        // An inline width rather than a utility class: the arbitrary value
+        // depends on the plugin stylesheet reaching this portal, and the
+        // vendored default (w-96) otherwise wins. min() keeps it inside a
+        // narrow window.
+        style={{ width: "min(34rem, calc(100vw - 2rem))" }}
+      >
         {isRunning ? (
           <div className="flex flex-col gap-3 p-3">
             <div>

@@ -59,6 +59,8 @@ export interface HarvestTimerClient {
     externalReference?: PickerExternalReference;
   }): Promise<{ entry: PickerEntry | null }>;
   lastSelection(input: { scope: string | null }): Promise<PickerSelection | null>;
+  /** Used by the row control's running panel, not by the picker itself. */
+  stopTimer(input: { entryId: number }): Promise<void>;
 }
 
 export interface HarvestTimerPickerProps {
@@ -237,7 +239,7 @@ export function HarvestTimerPicker({
           <Textarea
             id="harvest-notes"
             value={notes}
-            rows={2}
+            rows={3}
             onChange={(event) => setNotes(event.target.value)}
             className="resize-none"
           />
