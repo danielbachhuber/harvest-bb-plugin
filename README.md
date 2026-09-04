@@ -3,18 +3,21 @@
 A [bb](https://getbb.app) plugin for tracking time in [Harvest](https://www.getharvest.com/)
 without leaving the app.
 
-It adds a Track time control to the bb thread header and a pair of Harvest rows to
-the command palette. Both open a picker for choosing a project and task, writing a
-note, and starting a timer. A running timer is reflected back in the header with its
-elapsed time.
+## What it adds
 
-Timers carry a Harvest `external_reference`, so a timer started here is linked to the
-thing it is about and its hours are counted alongside timers started anywhere else
-that uses the same reference, including the Harvest Chrome extension.
+A Track time control in the bb thread header. It shows a clock when idle and
+the running timer's elapsed time when one is going, and opens a picker for
+choosing a project and task, writing a note, and starting a timer. A running
+timer can be stopped from the same control.
 
-## Status
+The plugin also exposes a generic RPC surface (`assignments`, `runningTimer`,
+`trackedHours`, `startTimer`, `stopTimer`, `lastSelection`) that knows nothing
+about any particular tool, so another bb plugin can start timers through it.
+The Issue Sweep plugin uses this to put a clock on each GitHub issue row.
 
-Early. Nothing is implemented yet.
+Timers started here carry the same `external_reference` convention the Harvest
+Chrome extension uses for GitHub, so hours tracked in either tool add up to one
+total rather than splitting in two.
 
 ## Configuration
 
